@@ -15,12 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class Remote_Installer {
-    private $remote_url = 'https://example.com/my_wp_plugins/';
+    private $default_remote_url = 'https://example.com/my_wp_plugins/';
     private $plugins_dir = 'plugins/';
     private $themes_dir = 'themes/';
 
     public function __construct() {
         add_action( 'admin_menu', array( $this, 'create_menu' ) );
+        add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
         add_action( 'wp_ajax_fetch_files', array( $this, 'ajax_fetch_files' ) );
         add_action( 'wp_ajax_install_file', array( $this, 'ajax_install_file' ) );
@@ -38,6 +39,10 @@ class Remote_Installer {
         );
     }
 
+    public function register_settings() {
+        register_setting( 'remote_installer_settings', 'remote_installer_url' );
+    }
+
     public function enqueue_scripts( $hook ) {
         if ( $hook != 'toplevel_page_remote-installer' ) {
             return;
@@ -52,10 +57,22 @@ class Remote_Installer {
     }
 
     public function admin_page() {
+        $remote_url = get_option( 'remote_installer_url', $this->default_remote_url );
         ?>
         <div class="wrap">
             <h1><?php esc_html_e( 'Remote Plugin and Theme Installer', 'remote-installer' ); ?></h1>
-            <button id="fetch-plugins"><?php esc_html_e( 'Отоброзить плагины и Темы', 'remote-installer' ); ?></button>
+            <form method="post" action="options.php">
+                <?php settings_fields( 'remote_installer_settings' ); ?>
+                <?php do_settings_sections( 'remote_installer_settings' ); ?>
+                <table class="form-table">
+                    <tr valign="top">
+                        <th scope="row"><?php esc_html_e( 'Remote URL', 'remote-installer' ); ?></th>
+                        <td><input type="text" name="remote_installer_url" value="<?php echo esc_attr( $remote_url ); ?>" class="regular-text" /></td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+            <button id="fetch-plugins"><?php esc_html_e( 'Отобразить плагины и Темы', 'remote-installer' ); ?></button>
             <div id="plugins-list"></div>
             <div id="themes-list"></div>
         </div>
@@ -63,7 +80,8 @@ class Remote_Installer {
     }
 
     private function fetch_remote_files( $type ) {
-        $url = $this->remote_url . ( $type === 'plugin' ? $this->plugins_dir : $this->themes_dir );
+        $remote_url = get_option( 'remote_installer_url', $this->default_remote_url );
+        $url = $remote_url . ( $type === 'plugin' ? $this->plugins_dir : $this->themes_dir );
         $response = wp_remote_get( $url );
         if ( is_wp_error( $response ) ) {
             return array();
